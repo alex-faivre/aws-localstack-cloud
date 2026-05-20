@@ -25,6 +25,23 @@ variable "web_ami_id" {
   default     = null
 }
 
+variable "instance_architecture" {
+  description = "Architecture CPU de l'instance EC2. 'x86_64' pour Intel/AMD (t3.*, m5.*, c5.*), 'arm64' pour Graviton ou Mac M-series (t4g.*, m6g.*, c6g.*). Doit être cohérent avec instance_type"
+  type        = string
+  default     = "x86_64"
+
+  validation {
+    condition     = contains(["x86_64", "arm64"], var.instance_architecture)
+    error_message = "instance_architecture doit être 'x86_64' ou 'arm64'."
+  }
+}
+
+variable "web_instance_type" {
+  description = "Type d'instance EC2. Doit être cohérent avec instance_architecture (t3.micro pour x86_64, t4g.micro pour arm64)"
+  type        = string
+  default     = "t3.micro"
+}
+
 variable "allowed_ssh_cidrs" {
   description = "CIDRs autorisés pour SSH vers l'instance web. Par défaut ouvert (LocalStack en local). À restreindre impérativement sur un compte AWS réel (ex: ['ton.ip.publique/32'])"
   type        = list(string)

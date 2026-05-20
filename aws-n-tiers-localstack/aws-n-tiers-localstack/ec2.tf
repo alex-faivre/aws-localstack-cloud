@@ -11,6 +11,16 @@ data "aws_ami" "ubuntu" {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd*/ubuntu-*"]
   }
+
+  filter {
+    name   = "architecture"
+    values = [var.instance_architecture]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 locals {
@@ -19,7 +29,7 @@ locals {
 
 resource "aws_instance" "web" {
   ami                         = local.web_ami
-  instance_type               = "t3.micro"
+  instance_type               = var.web_instance_type
   subnet_id                   = aws_subnet.public[0].id
   key_name                    = aws_key_pair.localstack.key_name
   vpc_security_group_ids      = [aws_security_group.web.id]

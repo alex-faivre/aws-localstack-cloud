@@ -28,7 +28,7 @@ Lab d'infrastructure n-tiers AWS déployé sur **LocalStack Pro** via Terraform.
 |---|---|---|
 | Réseau | `aws_vpc`, `aws_subnet`, `aws_internet_gateway`, `aws_nat_gateway`, `aws_route_table` | VPC `172.16.0.0/16`, 3 AZ, subnets public + web, NAT vers Internet |
 | Sécurité | `aws_security_group` | SG ALB (80/443 public), SG web (80 depuis ALB + 22 SSH configurable via `var.allowed_ssh_cidrs`) |
-| Calcul | `aws_instance`, `aws_key_pair`, `data.aws_ami` | 1 instance Ubuntu dans le subnet public, AMI résolue dynamiquement (Canonical) ou overridable via `var.web_ami_id`, clé SSH `localstack` |
+| Calcul | `aws_instance`, `aws_key_pair`, `data.aws_ami` | 1 instance Ubuntu dans le subnet public. AMI résolue par `data "aws_ami"` Canonical filtré sur `var.instance_architecture` (default `x86_64`), overridable par `var.web_ami_id`. Type d'instance via `var.web_instance_type` (default `t3.micro`). Clé SSH `localstack` |
 | Données | `aws_dynamodb_table` | Table `lab-factory-table`, `PAY_PER_REQUEST`, PITR + SSE actifs |
 | Secrets | `aws_secretsmanager_secret`, `random_password` | Credentials applicatifs (username + password 24 chars généré) |
 | DevX | `local_file` | Génère `.env.local` après chaque `apply` |
@@ -73,6 +73,12 @@ terraform apply
 ```
 
 L'apply produit automatiquement un fichier `.env.local` avec toutes les variables nécessaires (endpoint LocalStack, credentials test, nom du secret, etc.).
+
+> **Architecture CPU** : par défaut `instance_architecture = "x86_64"` et `web_instance_type = "t3.micro"`. Sur AWS réel avec Graviton ou Mac M-series, override en ligne de commande ou via `terraform.tfvars` :
+> ```bash
+> terraform apply -var instance_architecture=arm64 -var web_instance_type=t4g.micro
+> ```
+> Sur LocalStack, le catalogue d'AMI mocké ne contient que du x86_64 — laisser le défaut, ou forcer une AMI précise via `-var web_ami_id=ami-xxxxxxxx`.
 
 ### 3. Charger l'environnement
 
@@ -168,7 +174,7 @@ terraform destroy
 └── aws-n-tiers-localstack/
     └── aws-n-tiers-localstack/
         ├── provider.tf                  # Providers AWS / random / local + endpoints LocalStack
-        ├── variables.tf                 # Variables (project_name, region, vpc_cidr, db_username, web_ami_id, allowed_ssh_cidrs)
+        ├── variables.tf                 # Variables (project_name, region, vpc_cidr, db_username, web_ami_id, web_instance_type, instance_architecture, allowed_ssh_cidrs)
         ├── terraform.tfvars             # Valeurs versionnées non sensibles (pas de credentials)
         ├── network.tf                   # VPC, subnets, IGW, NAT, route tables
         ├── security-groups.tf           # SG ALB et web (SSH paramétrable)
