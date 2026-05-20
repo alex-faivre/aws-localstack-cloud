@@ -125,16 +125,21 @@ $(terraform output -raw ssh_command)
 ssh -o StrictHostKeyChecking=no -i ./localstack ubuntu@$(terraform output -raw web_public_ip)
 ```
 
-> **⚠️ État réel de la VM sur LocalStack**
+> **⚠️ SSH host → VM EC2 impossible sur macOS — limite documentée**
 >
-> Cette stack a été testée sur LocalStack Pro `2026.5.0.dev` (Mac ARM). Malgré la configuration recommandée par la doc (`EC2_VM_MANAGER=docker`, image taggée `localstack-ec2/<name>:<ami-id>`, socket Docker monté), **aucun container Docker backing n'est spawned** pour l'instance EC2 — celle-ci n'existe qu'en mock dans l'API LocalStack.
+> Sur macOS, **SSH depuis le host vers une instance EC2 LocalStack n'est intrinsèquement pas possible**. Citation verbatim de la [doc LocalStack EC2](https://docs.localstack.cloud/aws/services/ec2/) :
+> > *"Network access from host to EC2 instance containers is not possible on macOS. This is because Docker Desktop on macOS does not expose the bridge network to the host system."*
 >
-> **Conséquences** :
-> - `aws ec2 describe-instances` retourne `running` avec une IP, mais c'est de la fiction.
-> - **SSH ne fonctionne pas** : la commande `ssh_command` échouera en timeout/refus.
-> - Le code Terraform est néanmoins **valide pour AWS réel** : `aws_key_pair`, `aws_instance`, `aws_security_group` avec port 22 sont corrects et s'appliqueraient comme attendu sur un vrai compte AWS.
+> Symptômes côté API : `describe-instances` retourne `running` avec une IP publique fictive (54.x.x.x), mais aucun service n'écoute derrière. `ssh` aboutit à un timeout ou un refus.
 >
-> **Pour faire marcher SSH** : soit déployer sur AWS réel (retirer les `endpoints` LocalStack du provider), soit investiguer la configuration LocalStack Pro plus avant (versions stables, AMIs pré-shippées, support).
+> Testé sur ce repo avec LocalStack Pro `2026.4.3` (stable) **et** `2026.5.0.dev` (dev), avec `EC2_VM_MANAGER=docker` + `DEBUG=1` + image taguée `localstack-ec2/<name>:<ami-id>` exactement comme [le sample officiel `ec2-docker-instances`](https://github.com/localstack-samples/localstack-pro-samples/tree/master/ec2-docker-instances) → aucun container backing n'est spawned. Voir aussi [Issue #8367](https://github.com/localstack/localstack/issues/8367).
+>
+> **Le code Terraform reste valide pour AWS réel** : `aws_key_pair`, `aws_instance`, `aws_security_group` avec port 22 s'appliqueraient correctement sur un compte AWS et SSH y fonctionnerait nativement.
+>
+> **Workarounds possibles** si SSH local est indispensable :
+> - Remplacer Docker Desktop par **OrbStack** ou **Colima** qui exposent le bridge network au host sur macOS.
+> - Ajouter un **container side-car** (`linuxserver/openssh-server`) hors stack Terraform, accessible sur `localhost:2222`.
+> - Déployer sur **AWS réel** (retirer les `endpoints` LocalStack du `provider.tf`).
 
 ### Détruire
 
@@ -180,7 +185,8 @@ terraform destroy
 
 ## Limitations connues
 
-- **EC2 backing Docker non fonctionnel** sur notre setup LocalStack Pro `2026.5.0.dev` (Mac ARM) : malgré `EC2_VM_MANAGER=docker` et une image AMI taggée localement (`localstack-ec2/<name>:<ami-id>`), LocalStack ne reconnaît pas l'AMI et ne spawn aucun container backing. L'instance n'existe qu'en mock. → SSH non opérationnel en local. Le code Terraform reste valide pour AWS réel.
+- **SSH vers la VM EC2 impossible sur macOS** : Docker Desktop n'expose pas le bridge network au host ([doc LocalStack](https://docs.localstack.cloud/aws/services/ec2/)). Voir section "SSH vers l'instance EC2" plus haut pour les workarounds (OrbStack/Colima, side-car, AWS réel).
+- **EC2 Docker VM Manager non opérationnel** sur ce setup (Mac ARM + LocalStack Pro stable/dev) même avec la config officielle du sample LocalStack ([Issue #8367](https://github.com/localstack/localstack/issues/8367)). L'instance reste en mock côté API. Le code Terraform reste valide pour AWS réel.
 - LocalStack **Community** (gratuit) ne supporte de toute façon que le **mock VM manager** pour EC2.
 - Les modules **ALB** et **Route53** sont commentés (`load-balancer.tf`, `route53.tf`) — à activer pour un setup n-tiers complet.
 - Le **NAT Gateway sur LocalStack** rencontre parfois un bug `'NoneType' object has no attribute 'shutdown'` au destroy → contournement : `rm terraform.tfstate*` et restart du container LocalStack.
